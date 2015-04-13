@@ -22,6 +22,11 @@ class HabitViewController: UIViewController {
 
     // MARK: - View Life Cycle
     
+    override func viewWillAppear(animated: Bool) {
+        super.viewWillAppear(animated)
+//        navigationItem.leftBarButtonItem = nil
+    }
+    
     override func viewWillDisappear(animated: Bool) {
         super.viewWillDisappear(animated)
         habitController.saveHabits()
@@ -56,11 +61,23 @@ class HabitViewController: UIViewController {
 }
 
 extension HabitViewController: HabitControllerDelegate {
-    func habitController(habitController: HabitController, didRemoveFinalHabit habit: Habit) {
-        editButtonTapped(nil)
+
+    func habitController(habitController: HabitController, didLoadHabits: [Habit]) {
+//        navigationItem.leftBarButtonItem = editButton
+        tableView.reloadData()
     }
     
-    func habitController(habitController: HabitController, didLoadHabits: [Habit]) {
-        tableView.reloadData()
+    func habitController(habitController: HabitController, didAddHabit habit: Habit, isFirst: Bool) {
+        if isFirst {
+           navigationItem.leftBarButtonItem = editButton
+        }
+    }
+    
+    func habitController(habitController: HabitController, didRemoveHabit habit: Habit, wasLast: Bool) {
+        editButtonTapped(nil)
+//        
+//        if wasLast {
+//            navigationItem.leftBarButtonItem = nil
+//        }
     }
 }

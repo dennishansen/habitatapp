@@ -9,24 +9,30 @@
 import UIKit
 
 @objc protocol HabitControllerDelegate {
-    func habitController(habitController: HabitController, didRemoveFinalHabit habit: Habit)
+    func habitController(habitController: HabitController, didAddHabit habit: Habit, isFirst first: Bool)
+    func habitController(habitController: HabitController, didRemoveHabit habit: Habit, wasLast last: Bool)
     func habitController(habitController: HabitController, didLoadHabits: [Habit])
 }
 
-class HabitController: NSObject, NSCoding {
+class HabitController: NSObject {
     
-    @IBOutlet weak var delegate: UIViewController? {
+    @IBOutlet weak var delegate: AnyObject? {
         didSet {
-            habitControllerDelegate = delegate as?HabitControllerDelegate
+            habitControllerDelegate = delegate as? HabitControllerDelegate
         }
     }
     
     private var habitControllerDelegate: HabitControllerDelegate?
     private var habits: [Habit]
+    private var serialQueue: dispatch_queue_t = {
+        return dispatch_queue_create("com.eastmanlabs.plist-queue", nil)
+    }()
     
     var allHabits: [Habit] {
         get { return habits.map { $0 } }
     }
+
+    // MARK: - Initialization
     
     override init() {
         habits = [Habit]()
@@ -34,20 +40,20 @@ class HabitController: NSObject, NSCoding {
         loadHabits { self.habits = $0 }
     }
     
-    // MARK: - NSCoding
-    
-    required convenience init(coder aDecoder: NSCoder) {
-        self.init()
-        loadHabits { self.habits = $0 }
-    }
-    
-    func encodeWithCoder(aCoder: NSCoder) {
-    }
-
     // MARK: Add / Remove
     
     func addHabit(habit: Habit) {
        habits.append(habit)
+        
+        let isFirst: Bool
+        
+        if habits.count == 1 {
+           isFirst = true
+        } else {
+            isFirst = false
+        }
+        
+        delegate?.habitController(self, didAddHabit: habit, isFirst: isFirst)
     }
     
     func removeHabitAtIndex(index: Int) {
@@ -70,14 +76,17 @@ class HabitController: NSObject, NSCoding {
     
     func saveHabits() {
         if let plistPath = self.habitPlistPath() {
-            NSKeyedArchiver.archiveRootObject(habits as NSArray, toFile: plistPath)
+            dispatch_async(serialQueue) {
+                NSKeyedArchiver.archiveRootObject(habits as NSArray, toFile: plistPath)
+            }
         }
     }
     
     private func loadHabits(completion: (habits: [Habit]) -> ()) {
-        dispatch_async(dispatch_queue_create("com.eastmanlabs.loading-plist", nil)) {
-            dispatch_async(dispatch_get_main_queue()) {
+        dispatch_async(serialQueue) {
                 let loadedHabits = NSKeyedUnarchiver.unarchiveObjectWithFile(self.habitPlistPath()!) as? [Habit] ?? [Habit]()
+            
+            dispatch_async(dispatch_get_main_queue()) {
                 completion(habits: loadedHabits)
                 self.habitControllerDelegate?.habitController(self, didLoadHabits: loadedHabits)
             }
@@ -107,9 +116,13 @@ extension HabitController: UITableViewDataSource {
             
             if habits.isEmpty {
                 if let habitControllerDelegate = delegate as? HabitControllerDelegate {
-                    habitControllerDelegate.habitController(self, didRemoveFinalHabit: habit)
+                    habitControllerDelegate.habitController(self, didRemoveHabit: habit, wasLast: true)
                 }
             }
         }
+    }
+    
+    func tableView(tableView: UITableView, canMoveRowAtIndexPath indexPath: NSIndexPath) -> Bool {
+        return true
     }
 }
